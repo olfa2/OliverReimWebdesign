@@ -33,23 +33,62 @@ function validate(values) {
 function Contact() {
   const [values, setValues] = useState(initialValues)
   const [errors, setErrors] = useState({})
-  const [isSubmitted, setIsSubmitted] = useState(false)
+  const [status, setStatus] = useState({ type: '', message: '' })
+  const [isSending, setIsSending] = useState(false)
 
   const handleChange = (event) => {
     const { name, value } = event.target
     setValues((current) => ({ ...current, [name]: value }))
     setErrors((current) => ({ ...current, [name]: undefined }))
-    setIsSubmitted(false)
+    setStatus({ type: '', message: '' })
   }
 
-  const handleSubmit = (event) => {
+  const handleSubmit = async (event) => {
     event.preventDefault()
     const nextErrors = validate(values)
     setErrors(nextErrors)
 
-    if (Object.keys(nextErrors).length === 0) {
-      setIsSubmitted(true)
+    if (Object.keys(nextErrors).length > 0) {
+      setStatus({ type: 'error', message: 'Bitte prüfen Sie die markierten Felder.' })
+      return
+    }
+
+    setIsSending(true)
+    setStatus({ type: '', message: '' })
+
+    try {
+      const response = await fetch('/api/contact', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(values),
+      })
+
+      const data = await response.json().catch(() => ({}))
+
+      if (!response.ok) {
+        if (data.errors) {
+          setErrors(data.errors)
+        }
+
+        throw new Error(data.message || 'Die Anfrage konnte nicht gesendet werden.')
+      }
+
+      setStatus({
+        type: 'success',
+        message: data.message || 'Vielen Dank. Ihre Anfrage wurde erfolgreich gesendet.',
+      })
       setValues(initialValues)
+    } catch (error) {
+      setStatus({
+        type: 'error',
+        message:
+          error.message ||
+          'Die Anfrage konnte gerade nicht gesendet werden. Bitte versuchen Sie es später erneut.',
+      })
+    } finally {
+      setIsSending(false)
     }
   }
 
@@ -109,15 +148,22 @@ function Contact() {
             )}
           </div>
 
-          {isSubmitted && (
-            <div className="mt-5 rounded-lg border border-accent/30 bg-accent/10 px-4 py-3 text-sm font-medium text-accentDark">
-              Danke für Ihre Anfrage. Die Nachricht wurde clientseitig erfasst und das Formular ist bereit für eine
-              Backend-Anbindung.
+          {status.message && (
+            <div
+              className={`mt-5 rounded-lg border px-4 py-3 text-sm font-medium ${
+                status.type === 'success'
+                  ? 'border-accent/30 bg-accent/10 text-accentDark'
+                  : 'border-red-200 bg-red-50 text-red-700'
+              }`}
+              role="status"
+              aria-live="polite"
+            >
+              {status.message}
             </div>
           )}
 
-          <button type="submit" className="btn-primary mt-6 w-full">
-            Anfrage senden
+          <button type="submit" className="btn-primary mt-6 w-full disabled:cursor-not-allowed disabled:opacity-70" disabled={isSending}>
+            {isSending ? 'Anfrage wird gesendet...' : 'Anfrage senden'}
           </button>
         </form>
       </div>
